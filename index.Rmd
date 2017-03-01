@@ -9,23 +9,203 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Overview
 
-Hello
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This report analyses on the machine learning algorithm which is suitable to predict the manner in which people did the unilateral dumbbell biceps curl exercises. There are five classifications for this exercise which are: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). The report will cover model building, cross validation, out of sample error and the chosen machine learning algorithm to support the prediction. The prediction model is then used to predict 20 different test cases given.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+## Loading the Libraries and Data Set
 
-```{r cars}
-summary(cars)
+Loading the libraries
+
+```{r message=FALSE, warning=FALSE}
+library(caret)
+library(rattle)
+library(rpart)
+library(randomForest)
 ```
 
-## Including Plots
+Loading the training and testing dataset from the URL given.
 
-You can also embed plots, for example:
+```{r cache=TRUE}
+training<-read.csv(url("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"),header=TRUE,na.strings=c("NA","#DIV/0!",""))
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+testing<-read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"),header=TRUE,na.strings=c("NA","#DIV/0!",""))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Examining the dimension and the column names of the training dataset
+
+```{r cache=TRUE}
+dim(training)
+colnames(training)
+```
+
+Examining the dimension and the column names of the testing dataset
+
+```{r cache=TRUE}
+dim(testing)
+colnames(testing)
+```
+
+## Cleaning the training and testing dataset
+
+__Transform 1__: Some variables have no variability at all which are not useful when we want to construct a prediction model. We can use the nearZeroVar() to identify those variables so that we can exclude those variables from the training data set.
+
+```{r cache=TRUE}
+NZVdata<-nearZeroVar(training,saveMetrics=FALSE)
+training<-training[,-NZVdata]
+```
+
+__Transform 2__: Further clean the data by removing predictors which contains more than 60% NA value.
+
+```{r cache=TRUE}
+MostNAdata<-sapply(training, function(x) mean(is.na(x))) >0.6
+training<-training[,MostNAdata==F]
+```
+
+__Transform 3__: Removing non-related variables / predictors which does not help with the prediction, for instance, the first 2 columns of the data set (X and user_name)
+
+```{r cache=TRUE}
+training<-training[,-(1:2)]
+```
+
+Examine the dimension of training data set
+
+```{r cache=TRUE}
+dim(training)
+```
+
+Repeat the same transformation process to the testing data set.
+
+```{r cache=TRUE}
+testing<-testing[,-NZVdata]
+testing<-testing[,MostNAdata==F]
+testing<-testing[,-(1:2)]
+```
+
+Verify the column names are the same between the training and testing data set given (except the last columns labelled as "classe" - training and "problem_id" - testing .)
+
+```{r cache=TRUE}
+trainColNames<-colnames(training)
+testColNames<-colnames(testing)
+all.equal(trainColNames[1:length(trainColNames)-1],testColNames[1:length(trainColNames)-1])
+```
+
+Examine the dimension of the testing dataset
+
+```{r cache=TRUE}
+dim(testing)
+```
+
+Remove the last column "problem_id" from the testing data set which is not equal to the training data set since it will not be used in the model feature as predictors.
+
+```{r cache=TRUE}
+testing<-testing[,-57]
+```
+
+Ensure that the data in both the training and testing data set are of the same type/class.
+
+```{r cache=TRUE}
+for(i in 1:length(testing)){
+  for(j in 1:length(training)){     
+    if(length(grep(names(training[i]),names(testing)[j]))==1){
+      class(testing[j])<-class(training[i])
+    }
+  }
+}
+```
+
+Adding a row from the training data set to the testing data set to test that they are of the same type and remove the row immediately after adding.
+
+```{r cache=TRUE}
+testing<-rbind(training[2,-57],testing)
+testing<-testing[-1,]
+```
+
+## Cross Validation / Data Splitting on the training data set
+
+In the training data set, there are 19,622 observations can be found. In order to perform cross validation, the training data set is further split into sub-training data set (60% from the original training data set) and validation data set (40% from the original training data set).
+
+```{r cache=TRUE}
+set.seed(400)
+inTrain<-createDataPartition(y=training$classe,p=0.6,list=FALSE)
+subtrainingset<-training[inTrain,]
+validationset<-training[-inTrain,]
+```
+
+Examine the dimension of sub-training data set
+
+```{r cache=TRUE}
+dim(subtrainingset)
+```
+
+Examine the dimension of validation data set
+
+```{r cache=TRUE}
+dim(validationset)
+```
+
+## Using Decision Tree: Rpart Model for Predictions
+
+The fitted model for the sub-training data set is generated using the rpart method.
+
+```{r cache=TRUE}
+modFitRpart<-rpart(classe~.,data=subtrainingset,method="class") 
+```
+
+The decision tree can be plotted using the fancyRpartPlot method.
+
+```{r cache=TRUE}
+fancyRpartPlot(modFitRpart,cex=.5,under.cex=4.5,shadow.offset=0)
+```
+
+Then, the fitted model is used to predict the "classe" in the validation data set.
+
+```{r cache=TRUE}
+predRpart<-predict(modFitRpart,validationset,type="class")
+```
+
+Confusion matrix is used to evaluate the accuracy of the predicted classe value verses the actual classe value.
+
+```{r cache=TRUE}
+confusionMatrix(predRpart,validationset$classe)
+```
+
+> In testing the rpart model on the validation data set, the accuracy is 86.8%, thus the out of sample error is 13.2%. It can be seen that this model is less accurate for outcome D. Hence, we are going to explore Random Forest Model to determine whether the model will fit the data set better.
+
+## Using Random Forest Model for Predictions
+
+The fitted model for the sub-training data set is generated using the randomForest method.
+
+```{r cache=TRUE}
+modFitRF<-randomForest(classe~.,data=subtrainingset)
+```
+
+Then, the fitted model is used to predict the "classe" in the validation data set.
+
+```{r cache=TRUE}
+predRF<-predict(modFitRF,validationset,type="class")
+```
+
+Confusion matrix is used to evaluate the accuracy of the predicted classe value verses the actual classe value.
+
+```{r cache=TRUE}
+confusionMatrix(predRF,validationset$classe)
+```
+
+> The random forest model has a 99.92% accuracy, which produces a better result as compared to rpart model with an out of sample error of 0.08%. It can be seen that random forest model is better in classifying the classe value.
+
+## Applying the Random Forest Model to the testing dataset
+
+```{r cache=TRUE}
+predRFTest<-predict(modFitRF,testing,type="class")
+```
+
+The prediction result based on the model built on the 20 test cases given.
+
+```{r cache=TRUE}
+print(predRFTest)
+```
+
+## Conclusions
+
+Random Forest model can predict much better in the scenario given as compared to rpart model. Random Forest model has an accuracy as high as 99.92% in fitting the testing data set given. However, the accuracy might differ with different participants as the data set given only comes from a small group of 6 participants.
