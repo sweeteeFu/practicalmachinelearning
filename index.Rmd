@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Overview
 
-This report analyses on the machine learning algorithm which is suitable to predict the manner in which people did the unilateral dumbbell biceps curl exercises. There are five classifications for this exercise which are: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). The report will cover model building, cross validation, out of sample error and the chosen machine learning algorithm to support the prediction. The prediction model is then used to predict 20 different test cases given.
+This report analyses on the machine learning algorithm which is suitable to predict the manner in which people perform the unilateral dumbbell biceps curl exercises. There are five classifications for this exercise which are: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). The report will cover model building, cross validation, out of sample error and the chosen machine learning algorithm to support the prediction. The prediction model is then used to predict 20 different test cases given.
 
 ## Loading the Libraries and Data Set
 
